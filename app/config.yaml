@@ -1,0 +1,12 @@
+# Decor8 API
+url: "https://api.decor8.ai/generate_designs_for_room"
+headers: {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlfa2V5X3V1aWQiOiIwZDhmZTY1MS0xYTIzLTQzOWYtODVlMi04YWNhMThhMDU5YjgiLCJpYXQiOjE3MzYzMDEwNzh9.NV6Dpx9F7AhLQHrW-5NpHYxMvl7-P4v_sKHC9RCYtA4"
+}
+
+
+# Cloudinary API
+cloud_name: "djbnpu1dd"
+api_key: "789722731148739"
+api_secret: "NAu1p5Lo3DH2sZsbKtAlt_-MfnQ"

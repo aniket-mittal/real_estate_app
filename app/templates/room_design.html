@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room Design</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to bottom right, #2c3e50, #4ca1af);
+            color: white;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 0px;
+        }
+        p {
+            font-size: 14px;
+            margin-bottom: -40px;
+        }
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 90%;
+            height: 70vh;
+            gap: 20px;
+        }
+        .button-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            width: 45%;
+            justify-content: center;
+            padding: 10px;
+        }
+        .design-button {
+            background-color: #4ca1af;
+            color: white;
+            border: none;
+            padding: 12px 18px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: background-color 0.3s, color 0.3s;
+            text-align: center;
+        }
+        .design-button:hover {
+            background-color: #2c3e50;
+        }
+        .design-button.selected {
+            background-color: white;
+            color: #333;
+        }
+        .image-preview {
+            width: 40%;
+            height: auto; /* Ensure even border */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
+            padding: 15px;
+        }
+        .image-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .navigation {
+            width: 90%;
+            display: flex;
+            justify-content: center;
+            gap: 100px; /* Spaced closer */
+            margin-top: -40px;
+        }
+        .navigation button {
+            background: #4ca1af;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .navigation button:hover {
+            background: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <h1>Room Design</h1>
+    <p>Select the style for your images.</p>
+    <div class="container">
+        <div class="button-panel" id="button-panel">
+            {% for style in design_styles %}
+            <button class="design-button" data-image="{{ url_for('static', filename='design_photos/' + style) }}" data-style="{{ style }}">
+                {{ style.split('.')[0] | replace('_', ' ') | title }}
+            </button>
+            {% endfor %}
+        </div>
+        <div class="image-preview">
+            <img id="preview-image" src="{{ url_for('static', filename=default_image) }}" alt="Room Design Preview">
+        </div>
+    </div>
+    <div class="navigation">
+        <!-- Back Button -->
+        <form method="POST" action="/room_design">
+            <button type="submit" name="back">Back</button>
+        </form>
+
+        <!-- Next Button -->
+        <form method="POST" action="/room_design" id="design-form">
+            <input type="hidden" name="design_style" id="design-style" value="">
+            <button type="submit">Next</button>
+        </form>
+    </div>
+    <script>
+        const buttons = document.querySelectorAll(".design-button");
+        const previewImage = document.getElementById("preview-image");
+        const designStyleInput = document.getElementById("design-style");
+        const defaultImage = "{{ url_for('static', filename=default_image) }}";
+
+        // Update hidden input and preview image when a button is clicked
+        buttons.forEach(button => {
+            button.addEventListener("click", (e) => {
+                e.preventDefault(); // Prevent button from submitting the form
+                buttons.forEach(btn => btn.classList.remove("selected")); // Deselect all
+                button.classList.add("selected"); // Select clicked button
+                previewImage.src = button.dataset.image; // Update preview
+                designStyleInput.value = button.dataset.style; // Update hidden input
+            });
+        });
+
+        // Deselect all buttons and reset image on click outside
+        document.body.addEventListener("click", (e) => {
+            if (!e.target.closest(".design-button") && !e.target.closest(".navigation")) {
+                buttons.forEach(button => button.classList.remove("selected"));
+                previewImage.src = defaultImage; // Reset to default image
+                designStyleInput.value = defaultStyle; // Reset hidden input
+            }
+        });
+    </script>
+</body>
+</html>
