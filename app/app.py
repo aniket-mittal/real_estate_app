@@ -31,6 +31,9 @@ files = 0
 UPLOAD_FOLDER = os.path.join('app/static', 'uploads')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+AI_UPLOAD_FOLDER = os.path.join('app/static', 'AI_uploads')
+app.config['AI_UPLOAD_FOLDER'] = AI_UPLOAD_FOLDER
+
 # Create the upload folder if it doesn't exist
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -39,9 +42,13 @@ if not os.path.exists(UPLOAD_FOLDER):
 def index():
     # Path to the uploads folder
     uploads_folder = os.path.join(app.root_path, 'static/uploads')
+    AI_uploads_folder = os.path.join(app.root_path, 'static/AI_uploads')
 
     # Clear all files in the uploads folder
     for file in glob.glob(os.path.join(uploads_folder, '*')):
+        os.remove(file)
+
+    for file in glob.glob(os.path.join(AI_uploads_folder, '*')):
         os.remove(file)
 
     # Reset the session variables
@@ -130,10 +137,6 @@ def preview():
         session['image_paths'] = []
     if 'room_types' not in session:
         session['room_types'] = ["" for _ in session['image_paths']]
-    if 'upscale_factors' not in session:
-        session['upscale_factors'] = ["1" for _ in session['image_paths']]
-    if 'color_schemes' not in session:
-        session['color_schemes'] = ["Default" for _ in session['image_paths']]
 
     # Fetch the current image and index
     image_paths = session.get('image_paths', [])
@@ -141,7 +144,7 @@ def preview():
 
     # If no images, redirect to Room Design
     if not image_paths:
-        return redirect(url_for('room_design'))
+        return redirect(url_for('upload'))
 
     # Render Preview Page
     return render_template(
@@ -151,30 +154,6 @@ def preview():
         total=len(image_paths),
         room_type=session['room_types'][current_index],
         upscale_factor=session['upscale_factors'][current_index],
-        color_scheme=session['color_schemes'][current_index],
-        color_schemes=[
-            "Default",
-            "Moss Green, Tan, White",
-            "Gray, Sand, Blue",
-            "Hunter Green, Red",
-            "White, Pops of Color",
-            "Blue, Neon",
-            "Light Blue, Emerald",
-            "Blue, Grass Green",
-            "Blue, Beige",
-            "Gray, Brown",
-            "Black, Red",
-            "Gray-Green, White, Black",
-            "Blue, Gray, Taupe",
-            "Black, Navy",
-            "Emerald, Tan",
-            "Forest Green, Light Gray",
-            "Yellow, Gray",
-            "Pink, Green",
-            "Blush Pink, Black",
-            "Black, White",
-            "Blue, White"
-        ],
         enumerate=enumerate
     )
 
@@ -196,47 +175,40 @@ def navigate():
         if current_index < len(session.get('image_paths', [])) - 1:
             session['current_index'] += 1
         else:
-            return redirect(url_for('specialty_decor'))  # Redirect to Specialty Decor page
+            return redirect(url_for('confirm_image'))
 
     session.modified = True
     return redirect(url_for('preview'))
 
 
-@app.route('/specialty_decor', methods=['GET', 'POST'])
-def specialty_decor():
+@app.route('/confirm_image', methods=['GET', 'POST'])
+def confirm_image():
+    image_files = glob.glob(os.path.join(UPLOAD_FOLDER, '*'))  # Find all PNG images
+    total_images = len(image_files)
+    image_urls = [f"static/uploads/{os.path.basename(img)}" for img in image_files]
+
     if request.method == 'POST':
-        # Save the selected specialty decor style
-        selected_decor = request.form.get('design_style')
-        print(selected_decor)
-        if selected_decor:
-            session['selected_specialty_decor'] = selected_decor
-            session.modified = True
-            return redirect(url_for('download'))  # Navigate to Download page
+        return redirect(url_for('download'))
 
-    # Render Specialty Decor Page
-    decor_buttons = [
-        (1, "Halloween"),
-        (2, "Christmas"),
-        (3, "Thanksgiving"),
-        (4, "Fall"),
-        (5, "Spring"),
-        (6, "Summer"),
-        (7, "Winter")
-    ]
-    default_image = 'generic.jpg'
-    return render_template('specialty_decor.html', buttons=decor_buttons, default_image=default_image)
+    return render_template('confirm_image.html', total_images=total_images, image_urls=image_urls)
 
-
-# Global variable to track task status
 task_status = {"status": "pending", "result": None}
 
+# Global variable to track task status
 @app.route('/download', methods=['GET'])
 def download():
+    image_files = glob.glob(os.path.join(UPLOAD_FOLDER, '*'))  # Find all PNG images
+    total_images = len(image_files)
+    estimated_time = round(total_images * 0.5, 2)  # Estimate processing time
+
+    image_file_AI = glob.glob(os.path.join(AI_UPLOAD_FOLDER, "*"))  # Find all PNG images
+    image_urls_AI = [f"static/AI_uploads/{os.path.basename(img)}" for img in image_file_AI]
+    print(image_urls_AI)
+
     def long_task():
         global task_status
         try:
             task_status["status"] = "processing"
-            # Perform long-running tasks
             new_image_urls = generate_new_AI_images(session_data, config['url'], config['headers'])
             download_images(new_image_urls, "app/static/AI_uploads/")
             task_status["status"] = "completed"
@@ -249,8 +221,7 @@ def download():
     task_thread = threading.Thread(target=long_task)
     task_thread.start()
 
-    # Render the page with a loading screen
-    return render_template('download.html')
+    return render_template('download.html', total_time=estimated_time, image_urls=image_urls_AI)
 
 @app.route('/check-task-status', methods=['GET'])
 def check_task_status():

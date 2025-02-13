@@ -8,27 +8,95 @@
     <style>
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(to bottom right, #2c3e50, #4ca1af);
-            color: white;
+            background: linear-gradient(to bottom right, #f5f9ff, #fafbff);
+            color: #243985;
+            margin: 0;
+            padding: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            margin: 0;
-            padding: 0 20px;
-            overflow: hidden;
+        }
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 10px 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+        }
+        .logo {
+            margin-left: 200px;
+        }
+        .logo button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            margin-bottom: -5px;
+            margin-left: 2px;
+        }
+        .logo img {
+            height: 80px;
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 100px;
+            margin-right: 50px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #243985;
+            font-size: 18px;
+            font-weight: 600;
+            padding: 8px 12px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .nav-links a:hover {
+            background: #e0e7ff;
+        }
+        .dropdown {
+            position: relative;
+            display: inline-block;
+            margin-right: 100px;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background: white;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            right: 0;
+            min-width: 150px;
+            z-index: 1;
+        }
+        .dropdown-content a {
+            display: block;
+            padding: 10px;
+            color: #243985;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .dropdown-content a:hover {
+            background: #e0e7ff;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
         }
         h1 {
-            font-weight: 600;
-            margin-bottom: 10px;
             text-align: center;
+            margin: 40px 0 5px;
         }
         p {
-            font-size: 16px;
             text-align: center;
-            margin: 5px 0;
-            line-height: 1.4;
+            margin: 5px 0 10px;
         }
         form {
             background: white;
@@ -42,17 +110,13 @@
             width: auto;
         }
         label {
-            font-weight: 400;
             font-size: 16px;
-            color: #333;
-            margin-right: 10px;
         }
         input[type="file"] {
             font-size: 16px;
-            margin-right: -30px;
         }
         button {
-            background: #4ca1af;
+            background: #4e81ee;
             color: white;
             border: none;
             padding: 10px 20px;
@@ -64,55 +128,44 @@
         button:hover {
             background: #2c3e50;
         }
-        .background-elements {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
-            overflow: hidden;
-        }
-        .house-icon {
-            position: absolute;
-            width: 150px;
-            height: 150px;
-            background: white;
-            opacity: 0.1;
-            transform: rotate(45deg);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        }
-        .house-icon:nth-child(1) {
-            top: 10%;
-            left: 5%;
-        }
-        .house-icon:nth-child(2) {
-            top: 25%;
-            right: 10%;
-        }
-        .house-icon:nth-child(3) {
-            bottom: 15%;
-            left: 15%;
-        }
-        .house-icon:nth-child(4) {
-            bottom: 5%;
-            right: 5%;
-        }
     </style>
+    <script>
+        function validateForm(event) {
+            var fileInput = document.getElementById("images");
+            if (fileInput.files.length === 0) {
+                alert("Please upload at least one image before submitting.");
+                event.preventDefault(); // Prevent form submission
+                return false;
+            }
+            return true;
+        }
+    </script>
 </head>
 <body>
-    <div class="background-elements">
-        <div class="house-icon"></div>
-        <div class="house-icon"></div>
-        <div class="house-icon"></div>
-        <div class="house-icon"></div>
-    </div>
-    <h1>Welcome to THE REAL ESTATE APP!</h1>
+    <nav class="navbar">
+        <div class="logo">
+            <button onclick="window.location.href='/'">
+                <img src="static/Logo.png" alt="Logo">
+            </button>
+        </div>
+        <div class="nav-links">
+            <a href="#">Dashboard</a>
+            <div class="dropdown">
+                <a href="#">Account</a>
+                <div class="dropdown-content">
+                    <a href="#">Account Settings</a>
+                    <a href="#">Billing</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <h1>Welcome to Staging Sphere!</h1>
     <p>Please upload as many images as you would like in any image file format.</p>
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-        <label for="images">Upload Images:</label>
+    <form action="/upload" method="POST" enctype="multipart/form-data" onsubmit="return validateForm(event)">
+        <label for="images" style="margin-right: 10px;">Upload Images:</label>
         <input type="file" id="images" name="images" multiple>
-        <button type="submit">Upload</button>
+        <button style="margin-left: -30px;" type="submit">Upload</button>
     </form>
 </body>
 </html>

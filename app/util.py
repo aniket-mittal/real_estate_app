@@ -82,8 +82,8 @@ def generate_new_AI_images(session, url, headers):
             dictionary_of_items['room_types'][i], 
             dictionary_of_items['selected_room_style'].rsplit('.', 1)[0], 
             1, 
-            dictionary_of_items['upscale_factors'][i], 
-            dictionary_of_items['color_schemes'][i], 
+            1, 
+            "COLOR_SCHEME_0", 
             dictionary_of_items['selected_specialty_decor']
         ))
     

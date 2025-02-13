@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Download Your Photos</title>
+    <title>Confirm Your Images</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -17,16 +17,6 @@
             height: 100vh;
             margin: 0;
             flex-direction: column;
-        }
-        .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
-        h1 {
-            font-size: 36px;
-            margin-top: 100px;
         }
         .navbar {
             display: flex;
@@ -109,92 +99,64 @@
         .dropdown:hover .dropdown-content {
             display: block;
         }
-        /* Centered Loader */
-        .loading-container {
+        .container {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            text-align: center;
+        }
+        h1 {
+            font-size: 36px;
+            margin-top: 90px;
+        }
+
+        /* Image Counter */
+        #image-counter {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
         }
         
-        /* Loader Wheel */
-        .loader {
-            border: 6px solid rgba(36, 57, 133, 0.2);
-            border-top: 6px solid #243985;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading {
-            font-size: 20px;
-            color: #243985;
-            font-weight: 500;
-        }
-        
-        /* Stacking Image Animation */
+        /* Image Stack Animation */
         .image-stack {
             position: relative;
-            width: 400px;
-            height: 200px;
-            margin-top: 20px;
-            overflow: hidden;
-        }
-
-        /* Centered Image Stack */
-        .image-stack {
-            position: relative;
-            width: 50vw;  /* Adjust width dynamically */
-            height: 30vh; /* Adjust height dynamically */
-            margin-top: 20px;
+            width: 60vw;
+            height: 40vh;
+            margin-top: 10px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
         }
 
-        /* Stacking Image Animation */
         .image-stack img {
             position: absolute;
             width: auto;
-            height: 100%; /* Maintain aspect ratio */
+            height: 100%;
             max-width: 100%;
             border-radius: 8px;
             opacity: 0;
-            animation: stackImages 5s infinite linear;
+            transition: opacity 1s ease-in-out;
         }
 
-        /* Make images appear in sequence */
-        @keyframes stackImages {
-            0% { opacity: 0; transform: translateY(30px) scale(0.9); }
-            20% { opacity: 1; transform: translateY(0px) scale(1); }
-            80% { opacity: 1; transform: translateY(-5px) scale(1.05); }
-            100% { opacity: 0; transform: translateY(-30px) scale(1.1); }
+        /* Charge Info */
+        #charge-info {
+            font-size: 16px;
+            margin-top: 15px;
+            font-weight: 400;
+            color: #243985;
         }
 
-        .completed {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            gap: 15px;
-            margin-top: 30px;
-        }
-        
         .button-container {
             display: flex;
             gap: 20px;
+            margin-top: 30px;
         }
         
         /* Button Styling */
         button {
-            background: linear-gradient(to right, #5c87ff, #4e81ee);
+            background: #4e81ee;
             color: white;
             border: none;
             padding: 15px 25px;
@@ -203,10 +165,13 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 4px 10px rgba(36, 57, 133, 0.15);
+            margin-left: 120px;
+            margin-right: 120px;
+            margin-top: -5px;
         }
         
         button:hover {
-            background: linear-gradient(to right, #3b6be6, #2c3e50);
+            background: #2c3e50;
             transform: scale(1.05);
         }
 
@@ -234,83 +199,62 @@
         </div>
     </nav>
     <div class="container">
-        <h1>Download Your Photos</h1>
-        
-        <div id="loading-container" class="loading-container">
-            <div class="loader"></div>
-            <div id="estimated-time" class="loading">Estimated Time: {{ total_time }} Minutes</div>
-        </div>
-
-        <!-- Stacking Images Section (Hidden Initially) -->
+        <h1>Confirm Your Images</h1>
+        <div id="image-counter">Loading images...</div>  <!-- Image counter -->
         <div id="image-stack" class="image-stack"></div>
-
-        <div id="completed" class="completed">
-            <p style="font-size: 24px; font-weight: 600; color: #243985;">Task Completed!</p>
-            <div class="button-container">
-                <a href="/download-folder">
-                    <button>Download Photos</button>
-                </a>
-                <a href="/">
-                    <button>Generate More Images</button>
-                </a>
-            </div>
+        <p id="charge-info">You will be charged for {{ total_images }} images.</p> <!-- Charge info -->
+        <div class="button-container">
+            <a href="/preview">
+                <button><i class="fas fa-arrow-left"></i>&nbsp;&nbsp;&nbspBack</button>
+            </a>
+            <a href="/download">
+                <button>Confirm &nbsp;&nbsp;&nbsp;<i class="fas fa-arrow-right"></i></button>
+            </a>
         </div>
     </div>
 
     <script>
         function startImageAnimation(images) {
             let stackContainer = document.getElementById("image-stack");
-            stackContainer.innerHTML = ""; // Clear previous images
+            let imageCounter = document.getElementById("image-counter");
+
+            stackContainer.innerHTML = "";
 
             if (images.length === 0) {
                 console.error("DEBUG: No images to display!");
+                imageCounter.innerText = "No images available";
                 return;
             }
 
             console.log("DEBUG: Image list in JavaScript →", images);
 
+            let imgElement = document.createElement("img");
+            stackContainer.appendChild(imgElement);
+
             let index = 0;
-
             function showNextImage() {
-                let img = document.createElement("img");
-                img.src = images[index];
-                img.style.zIndex = index; // Ensure top layer
-                img.style.position = "absolute";
+                imgElement.src = images[index];
+                imgElement.style.opacity = "1";
+                imgElement.onerror = () => console.error(`ERROR: Failed to load image ${images[index]}`);
 
-                img.onload = () => {
-                    stackContainer.innerHTML = ""; // Clear previous images
-                    stackContainer.appendChild(img);
-                    img.style.opacity = "1";
-                };
+                // Update image counter
+                imageCounter.innerText = `${index + 1} of ${images.length} Images`;
 
-                img.onerror = () => {
-                    console.error(`ERROR: Failed to load image ${images[index]}`);
-                };
-
-                index = (index + 1) % images.length; // Loop through images
-                setTimeout(showNextImage, 2500);  // Change every 2.5 seconds
+                index = (index + 1) % images.length;
+                setTimeout(() => {
+                    imgElement.style.opacity = "0";
+                    setTimeout(showNextImage, 1000);
+                }, 2000);
             }
-
+            
             showNextImage();
         }
-        const imageList = {{ image_urls | tojson | safe }};
-        console.log("DEBUG: Image List in JS →", imageList);
-
-        const interval = setInterval(() => {
-            fetch('/check-task-status')
-                .then(res => res.json())
-                .then(data => {
-                    console.log("DEBUG: Task status received →", data);
-                    if (data.status === 'completed') {
-                        clearInterval(interval);
-                        document.getElementById('loading-container').style.display = 'none';
-                        document.getElementById('completed').style.display = 'flex';
-
-                        // Start stacking animation with imageList
-                        startImageAnimation(imageList);
-                    }
-                });
-        }, 2000);
+        
+        document.addEventListener("DOMContentLoaded", () => {
+            const imageList = JSON.parse('{{ image_urls | tojson | safe }}');
+            console.log("DEBUG: Image List in JS →", imageList);
+            startImageAnimation(imageList);
+        });
     </script>
 </body>
 </html>
