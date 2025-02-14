@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>Checkout</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(#f5f9ff, #fafbff);
+            background: linear-gradient(to bottom right, #f5f9ff, #fafbff);
             color: #243985;
             margin: 0;
             padding: 0;
@@ -36,21 +37,10 @@
         }
         .logo button {
             background: none;
-            box-shadow: none !important; 
             border: none;
             cursor: pointer;
-            margin-top: -5px;
-            margin-left: -5px;
-            margin-bottom: -5px;
         }
         .logo img {
-            background: none !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            filter: none !important;
-            display: block;
-            padding: 0;
-            margin: 0;
             height: 80px;
         }
         .nav-links {
@@ -99,67 +89,33 @@
         .dropdown:hover .dropdown-content {
             display: block;
         }
-        .info-boxes {
-            display: flex;
-            justify-content: space-evenly;
-            gap: 50px;
-            margin-top: 20px;
-        }
-        .info-box {
+        .form-container {
             background: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            font-size: 16px;
-            font-weight: 600;
-            width: 200px;
-        }
-        .info-box span {
-            display: block;  /* Forces values to a new line */
-            font-weight: normal;  /* Optional: Differentiate label and value */
-            font-size: 16px;  /* Slightly smaller for better readability */
-        }
-        .gallery {
-            margin-top: 30px;
+            padding: 20px 30px;
+            margin-top: 40px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: center;
             justify-content: center;
-            gap: 15px;
+            width: 350px;
         }
-        .gallery img {
-            width: 150px;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        }
-        .buttons {
-            margin-top: 30px;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-        }
-        .buttons button {
+        .form-container button {
             background: #243985;
-            padding: 12px 20px;
-            font-size: 16px;
+            margin-top: 20px;
+            padding: 12px;
+            width: 100%;
+            font-size: 15px;
+            border-radius: 5px; 
             color: white;
             border: none;
-            border-radius: 5px;
             cursor: pointer;
             font-weight: 600;
-            margin-top: 30px;
-            margin-left: 65px;
-            margin-right: 65px;
             transition: background 0.3s;
         }
-        .buttons button:hover {
+        .form-container button:hover {
             background: #1b2c6e;
-        }
-        h2 {
-            text-align: center;
-            width: 100%;
         }
     </style>
 </head>
@@ -182,44 +138,50 @@
         </div>
     </nav>
 
-    <div class="dashboard-container">
-        <h2>Welcome, {{ user_name }}</h2>
-        <div class="info-boxes">
-            <div class="info-box">Current Plan: <span>{{ subscription_plan }}</span></div>
-            <div class="info-box">Images Remaining: <span>{{ remaining_images }}</span></div>
-            <div class="info-box">Images Processed: <span>{{ processed_images }}</span></div>
-        </div>
-        
-
-        <div class="gallery">
-            {% if images %}
-                <div>
-                    <h3>Your Previous Images:</h3>
-                    {% for img in images %}
-                        <img src="{{ img }}" alt="Processed Image">
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p>No photos processed so far.</p>
-            {% endif %}
-        </div>
-
-        <div class="buttons">
-            <button onclick="window.location.href='/index'">Generate Photos</button>
-            <button onclick="window.location.href='/payment_options'">Buy More Photos / Subscription</button>
-            <button>Previous Images</button>
-        </div>
+    <div class="form-container">
+        <h2>Payment Details</h2>
+        <p><strong>Number of Images:</strong> {{ num_of_images }}</p>
+        <p><strong>Plan:</strong> {{ plan }}</p>
+        <p><strong>Cost:</strong> ${{ cost }}</p>
+        <button id="checkout-button">Proceed to Payment</button>
     </div>
+
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const urlParams = new URLSearchParams(window.location.search);
-            const message = urlParams.get("message");
+        document.addEventListener("DOMContentLoaded", async function () {
+            const stripe = Stripe("pk_test_51QsTjTQ37N8UETBkQnAEZrQv8MUQBLwdjTbWDxZETQTHq4KnKKKPAMb5wr8vij0FWF07ONzINWhXdEP4OzQUaUgp00uGMEFPLy"); // Replace with your actual public key
     
-            if (message === "success") {
-                alert("Payment Successful! Your images have been added.");
-            } else if (message === "failed") {
-                alert("Payment Failed! Please try again.");
-            }
+            document.getElementById("checkout-button").addEventListener("click", async () => {
+                try {
+                    console.log("Checkout button clicked"); // Debugging
+    
+                    const response = await fetch("/create-checkout-session", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" }
+                    });
+    
+                    const session = await response.json();
+                    console.log("Session response:", JSON.stringify(session, null, 2)); // Debugging
+    
+                    if (session.id) { // FIX: Correctly use session.id
+                        console.log("Session ID received:", session.id); // Debugging
+    
+                        // Open Stripe Checkout in a modal
+                        stripe.redirectToCheckout({ sessionId: session.id })
+                            .then((result) => {
+                                if (result.error) {
+                                    console.error("Stripe Checkout Error:", result.error);
+                                    alert("Payment failed: " + result.error.message);
+                                }
+                            });
+                    } else {
+                        console.error("No session ID received from backend:", session);
+                        alert("Failed to create a checkout session.");
+                    }
+                } catch (err) {
+                    console.error("Error creating checkout session:", err);
+                    alert("Something went wrong. Please try again.");
+                }
+            });
         });
     </script>
 </body>

@@ -15,6 +15,7 @@ import shutil
 import threading
 import pandas as pd
 import shutil
+import stripe
 
 with open("app/config.yaml", "r") as file:
     config = yaml.safe_load(file)
@@ -25,6 +26,8 @@ cloudinary.config(
     api_secret=config["api_secret"]
 )
 
+stripe.api_key = config["stripe_api"]
+
 app = Flask(__name__)
 app.secret_key = 'rayansucksatmarketing'
 files = 0
@@ -34,6 +37,9 @@ AI_UPLOAD_FOLDER = ''
 PAST_UPLOAD_FOLDER = ''
 username = ''
 user_csv_file = pd.read_csv('app/customers_info.csv')
+num_of_images_to_buy = 0
+subscription_to_buy = ''
+cost_for_purchase = 0
 
 @app.route('/')
 def login():
@@ -108,6 +114,7 @@ def register():
 
 @app.route('/dashboard')
 def dashboard():
+    global user_csv_file
     # Fetch user details from the dataframe
     user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
     user_name = user_info['name']
@@ -129,6 +136,30 @@ def dashboard():
                            remaining_images=remaining_images, 
                            processed_images=processed_images, 
                            images=images)
+
+@app.route('/payment_options')
+def payment_options():
+    global user_csv_file, username
+    user_current_subscription = user_csv_file.loc[user_csv_file['username'] == username, 'subscription'].iloc[0]
+    print(user_current_subscription)
+    return render_template('payment_options.html', current_subscription=user_current_subscription)
+
+
+@app.route('/update_payments', methods=['POST'])
+def update_payments():
+    global subscription_to_buy, num_of_images_to_buy, cost_for_purchase
+    
+    data = request.json
+    subscription_to_buy = data.get('plan')
+    num_of_images_to_buy = data.get('images', 0)
+    if subscription_to_buy == "subscription":
+        cost_for_purchase = 15.00
+    elif subscription_to_buy == "buy_more_images":
+        cost_for_purchase = num_of_images_to_buy * 0.8
+    else:
+        cost_for_purchase = num_of_images_to_buy * 1.5
+    
+    return jsonify({"status": "success"})
 
 @app.route('/index')
 def index():
@@ -260,6 +291,77 @@ def navigate():
     session.modified = True
     return redirect(url_for('preview'))
 
+
+@app.route('/checkout')
+def checkout():
+    # Simulate values coming from the backend
+    if subscription_to_buy == "buy_more_images":
+        plan = "Buy More Images"
+    elif subscription_to_buy == "pay_as_you_go":
+        plan = "Pay As You Go"
+    else:
+        plan = "Subscription"
+    return render_template("checkout.html", num_of_images=num_of_images_to_buy, plan=plan, cost=cost_for_purchase)
+
+@app.route('/create-checkout-session', methods=['POST'])
+def create_checkout_session():
+    try:
+        # Assume values are coming from the backend
+        
+        if subscription_to_buy == "subscription":
+            # Create a Stripe Product
+            product = stripe.Product.create(name=f"Subscription Plan - {num_of_images_to_buy} Images")
+            
+            # Create a Price Object for Subscription
+            price = stripe.Price.create(
+                unit_amount=int(cost_for_purchase * 100),  # Convert dollars to cents
+                currency="usd",
+                recurring={"interval": "month"},
+                product=product.id,
+            )
+        else:
+            # Create a Stripe Product
+            product = stripe.Product.create(name=f"One-Time Purchase - {num_of_images_to_buy} Images")
+            
+            # Create a Price Object for One-Time Payment
+            price = stripe.Price.create(
+                unit_amount=int(cost_for_purchase * 100),  # Convert dollars to cents
+                currency="usd",
+                product=product.id,
+            )
+        print("Price Object Created:", price.id)  # Debugging
+        # Create Stripe Checkout Session
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price": price.id,
+                    "quantity": 1,
+                }
+            ],
+            mode="subscription" if subscription_to_buy == "subscription" else "payment",
+            success_url=url_for('success', _external=True),
+            cancel_url=url_for('cancel', _external=True),
+        )
+        
+        return jsonify({"id": session.id})
+    except Exception as e:
+        return jsonify(error=str(e)), 400
+
+@app.route('/success')
+def success():
+    global user_csv_file, username, num_of_images_to_buy, subscription_to_buy
+    user_csv_file.loc[user_csv_file['username'] == username, 'remaining_photos'] += num_of_images_to_buy
+    if subscription_to_buy == "subscription":
+        user_csv_file.loc[user_csv_file['username'] == username, 'subscription'] = "Subscription"
+    if subscription_to_buy == "pay_as_you_go":
+        user_csv_file.loc[user_csv_file['username'] == username, 'subscription'] = "Pay As You Go"
+    user_csv_file.to_csv("app/customers_info.csv", index=False)
+    return redirect(url_for('dashboard',  message="success"))
+
+@app.route('/cancel')
+def cancel():
+    return redirect(url_for('dashboard',  message="failed"))
 
 @app.route('/confirm_image', methods=['GET', 'POST'])
 def confirm_image():

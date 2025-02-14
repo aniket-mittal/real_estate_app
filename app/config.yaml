@@ -10,3 +10,6 @@ headers: {
 cloud_name: "djbnpu1dd"
 api_key: "789722731148739"
 api_secret: "NAu1p5Lo3DH2sZsbKtAlt_-MfnQ"
+
+# Stripe API
+stripe_api: "sk_test_51QsTjTQ37N8UETBkexMfE5apehsd9JgaEL48KxuxYstgkX1mKV5ZHEqr6HdqPeeUch3CGLVmUR6RM6fPyQzP8chv00ZQZtz6oK"

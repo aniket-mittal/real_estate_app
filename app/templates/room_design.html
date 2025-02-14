@@ -175,17 +175,17 @@
 <body>
     <nav class="navbar">
         <div class="logo">
-            <button onclick="window.location.href='/'">
+            <button onclick="window.location.href='/dashboard'">
                 <img src="static/Logo.png" alt="Logo">
             </button>
         </div>
         <div class="nav-links">
-            <a href="#">Dashboard</a>
+            <a onclick="window.location.href='/dashboard'" href="#">Dashboard</a>
             <div class="dropdown">
                 <a href="#">Account</a>
                 <div class="dropdown-content">
                     <a href="#">Account Settings</a>
-                    <a href="#">Billing</a>
+                    <a onclick="window.location.href='/payment_options'" href="#">Billing</a>
                 </div>
             </div>
         </div>
