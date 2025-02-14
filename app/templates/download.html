@@ -261,56 +261,76 @@
         function startImageAnimation(images) {
             let stackContainer = document.getElementById("image-stack");
             stackContainer.innerHTML = ""; // Clear previous images
-
-            if (images.length === 0) {
+    
+            if (!images || images.length === 0) {
                 console.error("DEBUG: No images to display!");
                 return;
             }
-
-            console.log("DEBUG: Image list in JavaScript →", images);
-
+    
+            console.log("DEBUG: Starting animation with images →", images);
+    
             let index = 0;
-
+    
             function showNextImage() {
+                stackContainer.innerHTML = ""; // Clear previous image
                 let img = document.createElement("img");
                 img.src = images[index];
                 img.style.zIndex = index; // Ensure top layer
                 img.style.position = "absolute";
-
+                img.style.opacity = "0"; // Start hidden
+    
                 img.onload = () => {
-                    stackContainer.innerHTML = ""; // Clear previous images
                     stackContainer.appendChild(img);
-                    img.style.opacity = "1";
+                    setTimeout(() => img.style.opacity = "1", 100); // Fade-in effect
                 };
-
+    
                 img.onerror = () => {
                     console.error(`ERROR: Failed to load image ${images[index]}`);
                 };
-
+    
                 index = (index + 1) % images.length; // Loop through images
                 setTimeout(showNextImage, 2500);  // Change every 2.5 seconds
             }
-
+    
             showNextImage();
         }
-        const imageList = {{ image_urls | tojson | safe }};
-        console.log("DEBUG: Image List in JS →", imageList);
 
-        const interval = setInterval(() => {
-            fetch('/check-task-status')
-                .then(res => res.json())
-                .then(data => {
-                    console.log("DEBUG: Task status received →", data);
-                    if (data.status === 'completed') {
-                        clearInterval(interval);
-                        document.getElementById('loading-container').style.display = 'none';
-                        document.getElementById('completed').style.display = 'flex';
+        function fetchImageUpdates() {
+            const interval = setInterval(() => {
+                console.log("DEBUG: Fetching task status...");
+                fetch('/check_status')  // ✅ Fix: Now fetching the correct endpoint
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log("DEBUG: Task status received →", data);
 
-                        // Start stacking animation with imageList
-                        startImageAnimation(imageList);
-                    }
-                });
-        }, 2000);
+                        if (!data || !data.status) {
+                            console.error("ERROR: Invalid response from backend!", data);
+                            return;
+                        }
+
+                        if (data.status === 'completed') {
+                            clearInterval(interval);  // ✅ Stop polling
+                            document.getElementById('loading-container').style.display = 'none';
+                            document.getElementById('completed').style.display = 'flex';
+
+                            console.log("DEBUG: Fetching updated images...");
+                            // Fetch updated images
+                            if (data.images && data.images.length > 0) {
+                                startImageAnimation(data.images);
+                            } else {
+                                console.warn("DEBUG: No images found in update.");
+                            }
+                        } else if (data.status === 'error') {
+                            console.error("ERROR: Task failed!", data.result);
+                            document.getElementById('statusMessage').innerText = "Error: " + data.result;
+                            clearInterval(interval);
+                        }
+                    })
+                    .catch(error => console.error("ERROR: Fetching task status failed →", error));
+            }, 2000);
+        }
+
+        fetchImageUpdates();
     </script>
 </body>
 </html>

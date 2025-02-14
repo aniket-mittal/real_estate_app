@@ -72,7 +72,7 @@ def generate_new_AI_images(session, url, headers):
     list_of_urls = []
     
     for i in range(len(dictionary_of_items['image_paths'])):
-        image_url = upload_image("app/static/" + dictionary_of_items['image_paths'][i])  # Use indexed access for 'image_paths'
+        image_url = upload_image(dictionary_of_items['image_paths'][i])  # Use indexed access for 'image_paths'
         if not dictionary_of_items['selected_specialty_decor']:
             dictionary_of_items['selected_specialty_decor'] = "SPECIALITY_DECOR_0"
         list_of_urls.append(run_api(
@@ -96,7 +96,7 @@ def download_images(image_urls, output_folder):
             response.raise_for_status()  # Check if the request was successful
             
             # Save the image with a sequential filename
-            file_path = f"{output_folder}image_{i}.jpg"
+            file_path = f"{output_folder}/image_{i}.jpg"
             with open(file_path, "wb") as f:
                 f.write(response.content)
             

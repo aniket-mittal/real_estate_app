@@ -179,7 +179,7 @@
     </nav>
     <h1>Room Selection</h1>
     <p class="image-count">{{ index }} of {{ total }}</p>
-    <img src="{{ url_for('static', filename=image_path) }}" alt="Preview">
+    <img src="{{ image_path }}" alt="Preview">
     <div class="controls">
         <!-- Back Button -->
         <form action="/navigate" method="POST">

@@ -1,0 +1,2 @@
+username,name,email,phone_number,password,upload_dir,ai_upload_dir,past_upload_dir,subscription,remaining_photos
+aniketm,Aniket Mittal,aniket_mittal@berkeley.edu,4082158637,typeshit,app/static/customers/aniketm/uploads,app/static/customers/aniketm/AI_uploads,app/static/customers/aniketm/past_uploads,No Plan,98
