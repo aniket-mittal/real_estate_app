@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkout</title>
+    <title>Account Settings</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-    <script src="https://js.stripe.com/v3/"></script>
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -92,7 +91,6 @@
         .form-container {
             background: white;
             padding: 20px 30px;
-            margin-top: 40px;
             border-radius: 15px;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
             display: flex;
@@ -100,6 +98,14 @@
             align-items: center;
             justify-content: center;
             width: 350px;
+        }
+        .form-container input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
         }
         .form-container button {
             background: #243985;
@@ -116,6 +122,47 @@
         }
         .form-container button:hover {
             background: #1b2c6e;
+        }
+        .delete-btn {
+            background: red;
+            margin-top: 10px;
+        }
+        .delete-btn:hover {
+            background: darkred;
+        }
+        .cancel-btn {
+            background: #ff9800;
+            margin-top: 10px;
+        }
+        .cancel-btn:hover {
+            background: #e68900;
+        }
+        .popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            text-align: center;
+        }
+        .popup button {
+            margin: 10px;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .popup .yes-btn {
+            background: red;
+            color: white;
+        }
+        .popup .no-btn {
+            background: gray;
+            color: white;
         }
     </style>
 </head>
@@ -137,52 +184,85 @@
             </div>
         </div>
     </nav>
-
     <div class="form-container">
-        <h2>Payment Details</h2>
-        <p><strong>Number of Images:</strong> {{ num_of_images }}</p>
-        <p><strong>Plan:</strong> {{ plan }}</p>
-        <p><strong>Cost:</strong> ${{ cost }}</p>
-        <button id="checkout-button">Proceed to Payment</button>
+        <h2>Account Settings</h2>
+        <label for="name">Name</label>
+        <input type="text" id="name" value="{{ name }}">
+        
+        <label for="email">Email</label>
+        <input type="email" id="email" value="{{ email }}">
+        
+        <label for="phone">Phone Number</label>
+        <input type="text" id="phone" value="{{ phone }}">
+
+        <!-- Cancel Subscription Button (conditionally displayed) -->
+        {% if plan != '' %}
+            <button class="cancel-btn" onclick="confirmSubscriptionCancellation()">Cancel Subscription</button>
+        {% endif %}
+
+        <button class="delete-btn" onclick="confirmDeletion()">Delete Account</button>
+    </div>
+    
+    <!-- Delete Account Popup -->
+    <div class="popup" id="deletePopup">
+        <p>You will lose all image credits & would need to create a new account.</p>
+        <button class="yes-btn" onclick="deleteAccount()">Yes</button>
+        <button class="no-btn" onclick="closePopup()">No</button>
+    </div>
+
+    <!-- Cancel Subscription Popup -->
+    <div class="popup" id="cancelPopup">
+        <p>Are you sure you want to cancel your subscription?</p>
+        <button class="yes-btn" onclick="cancelSubscription()">Yes</button>
+        <button class="no-btn" onclick="closeCancelPopup()">No</button>
     </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", async function () {
-            const stripe = Stripe("pk_test_51QsTjTQ37N8UETBkQnAEZrQv8MUQBLwdjTbWDxZETQTHq4KnKKKPAMb5wr8vij0FWF07ONzINWhXdEP4OzQUaUgp00uGMEFPLy"); // Replace with your actual public key
-    
-            document.getElementById("checkout-button").addEventListener("click", async () => {
-                try {
-                    console.log("Checkout button clicked"); // Debugging
-    
-                    const response = await fetch("/create-checkout-session", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" }
-                    });
-    
-                    const session = await response.json();
-                    console.log("Session response:", JSON.stringify(session, null, 2)); // Debugging
-    
-                    if (session.id) { // FIX: Correctly use session.id
-                        console.log("Session ID received:", session.id); // Debugging
-    
-                        // Open Stripe Checkout in a modal
-                        stripe.redirectToCheckout({ sessionId: session.id })
-                            .then((result) => {
-                                if (result.error) {
-                                    console.error("Stripe Checkout Error:", result.error);
-                                    alert("Payment failed: " + result.error.message);
-                                }
-                            });
-                    } else {
-                        console.error("No session ID received from backend:", session);
-                        alert("Failed to create a checkout session.");
-                    }
-                } catch (err) {
-                    console.error("Error creating checkout session:", err);
-                    alert("Something went wrong. Please try again.");
+        function confirmDeletion() {
+            document.getElementById('deletePopup').style.display = 'block';
+        }
+
+        function closePopup() {
+            document.getElementById('deletePopup').style.display = 'none';
+        }
+
+        function deleteAccount() {
+            fetch('/delete-account', {
+                method: 'POST',
+            }).then(response => {
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    alert('Error deleting account.');
                 }
+            }).catch(error => {
+                console.error('Error:', error);
+                alert('Something went wrong.');
             });
-        });
+        }
+
+        function confirmSubscriptionCancellation() {
+            document.getElementById('cancelPopup').style.display = 'block';
+        }
+
+        function closeCancelPopup() {
+            document.getElementById('cancelPopup').style.display = 'none';
+        }
+
+        function cancelSubscription() {
+            fetch('/cancel_subscription', {
+                method: 'POST',
+            }).then(response => {
+                if (response.ok) {
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('Error canceling subscription.');
+                }
+            }).catch(error => {
+                console.error('Error:', error);
+                alert('Something went wrong.');
+            });
+        }
     </script>
 </body>
 </html>

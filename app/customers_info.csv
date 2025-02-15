@@ -1,3 +1,3 @@
 username,name,email,phone_number,password,upload_dir,ai_upload_dir,past_upload_dir,subscription,remaining_photos
-aniketm,Aniket Mittal,aniket_mittal@berkeley.edu,4082158637,typeshit,app/static/customers/aniketm/uploads,app/static/customers/aniketm/AI_uploads,app/static/customers/aniketm/past_uploads,Subscription,100
-rayansg10,Rayan Sengupta,rayansg10@gmail.com,4088582822,hello,app/static/customers/rayansg10/uploads,app/static/customers/rayansg10/AI_uploads,app/static/customers/rayansg10/past_uploads,No Plan,-1
+aniketm,Aniket Mittal,aniket_mittal@berkeley.edu,4082158637,typeshit,app/static/customers/aniketm/uploads,app/static/customers/aniketm/AI_uploads,app/static/customers/aniketm/past_uploads,Subscription,101
+rayansg10,Rayan Sengupta,rayansg10@gmail.com,2142342342,hello,app/static/customers/rayansg10/uploads,app/static/customers/rayansg10/AI_uploads,app/static/customers/rayansg10/past_uploads,No Plan,0

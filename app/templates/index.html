@@ -153,7 +153,7 @@
             <div class="dropdown">
                 <a href="#">Account</a>
                 <div class="dropdown-content">
-                    <a href="#">Account Settings</a>
+                    <a onclick="window.location.href='/account_settings'" href="#">Account Settings</a>
                     <a onclick="window.location.href='/payment_options'" href="#">Billing</a>
                 </div>
             </div>
@@ -167,5 +167,26 @@
         <input type="file" id="images" name="images" multiple>
         <button style="margin-left: -30px;" type="submit">Upload</button>
     </form>
+    <script>
+        var remainingImages = {{ remaining_images }}; // Assuming this is provided by the backend
+    
+        document.getElementById("images").addEventListener("change", function(event) {
+            var selectedFiles = event.target.files.length;
+            if (selectedFiles > remainingImages) {
+                alert("You can only upload " + remainingImages + " more images.");
+                event.target.value = ""; // Reset file input
+            }
+        });
+    
+        function validateForm(event) {
+            var fileInput = document.getElementById("images");
+            if (fileInput.files.length === 0) {
+                alert("Please upload at least one image before submitting.");
+                event.preventDefault(); // Prevent form submission
+                return false;
+            }
+            return true;
+        }
+    </script>
 </body>
 </html>

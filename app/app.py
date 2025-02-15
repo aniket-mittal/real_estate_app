@@ -81,7 +81,6 @@ def register():
     
     if password != confirm_password:
         return render_template('create_account.html', error="Passwords do not match.")
-    # ,username,name,email,phone_number,password,upload_dir,ai_upload_dir,past_upload_dir,subscription,remaining_photos
 
     new_user = {
         "username": username_value,
@@ -112,9 +111,38 @@ def register():
     session['user'] = username_value
     return redirect(url_for('dashboard'))
 
+@app.route('/account_settings')
+def account_settings():
+    global user_csv_file, username
+    user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
+    print(user_info)
+    user_name = user_info['name']
+    user_plan = user_info['subscription']
+    if user_plan != "Subscription":
+        user_plan = ''
+    user_email = user_info['email']
+    user_phone = user_info['phone_number']
+
+    return render_template('account_settings.html', name=user_name, email=user_email, phone=user_phone, plan=user_plan)
+
+@app.route('/delete-account', methods=['POST'])
+def delete_account():
+    global user_csv_file, username
+    shutil.rmtree(UPLOAD_FOLDER.replace("/uploads", ""))
+    user_csv_file = user_csv_file[user_csv_file['username'] != username]
+    user_csv_file.to_csv("app/customers_info.csv", index=False)
+    return jsonify({"message": "Account deleted successfully"}), 200
+
+@app.route("/cancel_subscription", methods=['POST'])
+def cancel_subscription():
+    global user_csv_file, username
+    user_csv_file.loc[user_csv_file['username'] == username, 'subscription'] = "No Plan"
+    user_csv_file.to_csv("app/customers_info.csv", index=False)
+    return jsonify({"message": "Subscription canceled successfully"}), 200
+
 @app.route('/dashboard')
 def dashboard():
-    global user_csv_file
+    global user_csv_file, username
     # Fetch user details from the dataframe
     user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
     user_name = user_info['name']
@@ -144,6 +172,36 @@ def payment_options():
     print(user_current_subscription)
     return render_template('payment_options.html', current_subscription=user_current_subscription)
 
+@app.route('/previous_images')
+def previous_images():
+    global PAST_UPLOAD_FOLDER
+    image_files = glob.glob(os.path.join(PAST_UPLOAD_FOLDER, '*'))
+    image_urls = [f"{PAST_UPLOAD_FOLDER.replace('app/', '')}/{os.path.basename(img)}" for img in image_files]
+    print(image_urls)
+    return render_template('previous_images.html', image_files=image_urls)
+
+@app.route('/download_past_uploads')
+def download_past_uploads():
+    global PAST_UPLOAD_FOLDER
+    ZIP_FILE_PATH = os.path.join(PAST_UPLOAD_FOLDER.replace("app/", "").replace("past_uploads", ""), "past_uploads.zip")
+    try:
+        # Compress the folder into a zip file
+        if not os.path.exists(ZIP_FILE_PATH):
+            shutil.make_archive(PAST_UPLOAD_FOLDER, 'zip', PAST_UPLOAD_FOLDER)
+        # Serve the zip file
+        response = send_file(
+            ZIP_FILE_PATH,
+            as_attachment=True,
+            download_name="images.zip",
+            mimetype='application/zip'
+        )
+
+        # Delete the zip file after serving
+        os.remove("app/" + ZIP_FILE_PATH)
+
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/update_payments', methods=['POST'])
 def update_payments():
@@ -165,7 +223,10 @@ def update_payments():
 def index():
     if 'user' not in session:
         return redirect(url_for('login'))
-    return render_template('index.html')
+    global user_csv_file, username
+    user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
+    remaining_images = user_info['remaining_photos']
+    return render_template('index.html', remaining_images=remaining_images)
 
 @app.route('/upload', methods=['POST'])
 def upload():

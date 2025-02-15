@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>Previous Images</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(#f5f9ff, #fafbff);
+            background: linear-gradient(to bottom right, #f1f6fe, #f8fbff);
             color: #243985;
-            margin: 0;
-            padding: 0;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
+            margin: 0;
+            flex-direction: column;
         }
         .navbar {
             display: flex;
@@ -99,67 +99,58 @@
         .dropdown:hover .dropdown-content {
             display: block;
         }
-        .info-boxes {
+        .container {
             display: flex;
-            justify-content: space-evenly;
-            gap: 50px;
-            margin-top: 20px;
-        }
-        .info-box {
-            background: white;
-            padding: 15px 25px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            flex-direction: column;
+            align-items: center;
             text-align: center;
-            font-size: 16px;
-            font-weight: 600;
-            width: 200px;
         }
-        .info-box span {
-            display: block;  /* Forces values to a new line */
-            font-weight: normal;  /* Optional: Differentiate label and value */
-            font-size: 16px;  /* Slightly smaller for better readability */
+        h1 {
+            font-size: 36px;
+            margin-top: 100px;
+            margin-bottom: 30px;
         }
-        .gallery {
-            margin-top: 30px;
+        .image-stack {
+            position: relative;
+            width: 60vw;
+            height: 40vh;
+            margin-top: 10px;
+            margin-bottom: 10px;
             display: flex;
-            flex-wrap: wrap;
+            align-items: center;
             justify-content: center;
-            gap: 15px;
+            overflow: hidden;
         }
-        .gallery img {
-            width: 150px;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        .image-stack img {
+            position: absolute;
+            width: auto;
+            height: 100%;
+            max-width: 100%;
+            border-radius: 8px;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
         }
-        .buttons {
-            margin-top: 30px;
+        .button-container {
             display: flex;
-            justify-content: center;
             gap: 20px;
+            margin-top: 30px;
         }
-        .buttons button {
-            background: #243985;
-            padding: 12px 20px;
-            font-size: 16px;
+        button {
+            background: #4e81ee;
             color: white;
             border: none;
-            border-radius: 5px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-size: 15px;
+            margin-left: 50px;
+            margin-right: 50px;
             cursor: pointer;
-            font-weight: 600;
-            margin-top: 30px;
-            margin-left: 65px;
-            margin-right: 65px;
-            transition: background 0.3s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(36, 57, 133, 0.15);
         }
-        .buttons button:hover {
-            background: #1b2c6e;
-        }
-        h2 {
-            text-align: center;
-            width: 100%;
+        button:hover {
+            background: #2c3e50;
+            transform: scale(1.05);
         }
     </style>
 </head>
@@ -181,44 +172,41 @@
             </div>
         </div>
     </nav>
-
-    <div class="dashboard-container">
-        <h2>Welcome, {{ user_name }}</h2>
-        <div class="info-boxes">
-            <div class="info-box">Current Plan: <span>{{ subscription_plan }}</span></div>
-            <div class="info-box">Images Remaining: <span>{{ remaining_images }}</span></div>
-            <div class="info-box">Images Processed: <span>{{ processed_images }}</span></div>
-        </div>
-        
-
-        <div class="gallery">
-            {% if images %}
-                <div>
-                    <h3>Your Previous Images:</h3>
-                    {% for img in images %}
-                        <img src="{{ img }}" alt="Processed Image">
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p>No photos processed so far.</p>
-            {% endif %}
-        </div>
-
-        <div class="buttons">
-            <button onclick="window.location.href='/index'">Generate Photos</button>
-            <button onclick="window.location.href='/payment_options'">Buy More Photos / Subscription</button>
-            <button onclick="window.location.href='/previous_images'">Previous Images</button>
+    <div class="container">
+        <h1>Previous Images</h1>
+        <div id="image-stack" class="image-stack"></div>
+        <div class="button-container">
+            <a href="/dashboard">
+                <button><i class="fas fa-arrow-left"></i>&nbsp;&nbsp;&nbsp;Back</button>
+            </a>
+            <a href="/download_past_uploads">
+                <button>Download&nbsp;&nbsp;&nbsp;<i class="fas fa-download"></i></button>
+            </a>
         </div>
     </div>
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const urlParams = new URLSearchParams(window.location.search);
-            const message = urlParams.get("message");
-    
-            if (message === "success") {
-                alert("Payment Successful! Your images have been added.");
-            } else if (message === "failed") {
-                alert("Payment Failed! Please try again.");
+        document.addEventListener("DOMContentLoaded", function() {
+            let imageFiles = JSON.parse('{{ image_files | tojson | safe }}');
+            let imageStack = document.getElementById("image-stack");
+            
+            if (imageFiles.length === 0) {
+                imageStack.innerHTML = "<p>You have no past images</p>";
+            } else {
+                let imgElement = document.createElement("img");
+                imageStack.appendChild(imgElement);
+                
+                let index = 0;
+                function showNextImage() {
+                    imgElement.src = imageFiles[index];
+                    imgElement.style.opacity = "1";
+                    imgElement.onerror = () => console.error(`ERROR: Failed to load image ${imageFiles[index]}`);
+                    index = (index + 1) % imageFiles.length;
+                    setTimeout(() => {
+                        imgElement.style.opacity = "0";
+                        setTimeout(showNextImage, 1000);
+                    }, 2000);
+                }
+                showNextImage();
             }
         });
     </script>
