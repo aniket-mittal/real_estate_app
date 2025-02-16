@@ -6,7 +6,7 @@ import yaml
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
-from flask import Flask, render_template, request, redirect, url_for, session, send_file, jsonify, g
+from flask import Flask, render_template, request, redirect, url_for, session, send_file, jsonify, g, send_from_directory
 import os
 import glob
 from werkzeug.utils import secure_filename
@@ -84,6 +84,15 @@ def init_db():
 init_db()
 
 @app.route('/')
+def serve_react():
+    return send_from_directory('static', 'index.html')
+
+# Route to serve React static files
+@app.route('/<path:path>')
+def serve_react_files(path):
+    return send_from_directory('static', path)
+
+@app.route('/application')
 def login():
     return render_template('login.html')
 
