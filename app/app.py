@@ -6,7 +6,7 @@ import yaml
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
-from flask import Flask, render_template, request, redirect, url_for, session, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, send_file, jsonify, g
 import os
 import glob
 from werkzeug.utils import secure_filename
@@ -16,6 +16,7 @@ import threading
 import pandas as pd
 import shutil
 import stripe
+import sqlite3
 
 with open("app/config.yaml", "r") as file:
     config = yaml.safe_load(file)
@@ -30,16 +31,57 @@ stripe.api_key = config["stripe_api"]
 
 app = Flask(__name__)
 app.secret_key = 'rayansucksatmarketing'
-files = 0
 
-UPLOAD_FOLDER = ''
-AI_UPLOAD_FOLDER = ''
-PAST_UPLOAD_FOLDER = ''
-username = ''
-user_csv_file = pd.read_csv('app/customers_info.csv')
-num_of_images_to_buy = 0
-subscription_to_buy = ''
-cost_for_purchase = 0
+
+DATABASE = "app/customers.db"
+
+# Database connection
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE, check_same_thread=False)
+        db.row_factory = sqlite3.Row
+    return db
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+# Initialize the database
+def init_db():
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            username TEXT UNIQUE,
+            email TEXT,
+            phone_number TEXT,
+            password TEXT,
+            upload_dir TEXT,
+            ai_upload_dir TEXT,
+            past_upload_dir TEXT,
+            subscription TEXT DEFAULT 'No Plan',
+            remaining_photos INTEGER DEFAULT 0
+        )""")
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            user_id INTEGER PRIMARY KEY,
+            status TEXT DEFAULT 'pending',
+            result TEXT,
+            images TEXT,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )""")
+
+        db.commit()
+
+init_db()
 
 @app.route('/')
 def login():
@@ -47,20 +89,24 @@ def login():
 
 @app.route('/authenticate', methods=['POST'])
 def authenticate():
-    global UPLOAD_FOLDER, AI_UPLOAD_FOLDER, PAST_UPLOAD_FOLDER, username, user_csv_file
+    db = get_db()
     username_value = request.form.get('username')
     password = request.form.get('password')
     
-    if username_value in user_csv_file['username'].values and password ==  user_csv_file.loc[user_csv_file['username'] == username_value, 'password'].iloc[0]: 
-        session['user'] = username_value
-        username = username_value
-        UPLOAD_FOLDER = user_csv_file.loc[user_csv_file['username'] == username, 'upload_dir'].iloc[0]
-        AI_UPLOAD_FOLDER = user_csv_file.loc[user_csv_file['username'] == username, 'ai_upload_dir'].iloc[0]
-        PAST_UPLOAD_FOLDER = user_csv_file.loc[user_csv_file['username'] == username, 'past_upload_dir'].iloc[0]
-        for file in glob.glob(os.path.join(UPLOAD_FOLDER, '*')):
+    user = db.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username_value, password)).fetchone()
+
+    if user:
+        session['user_id'] = user['id']
+        session['username'] = user['username']
+        session['upload_folder'] = user['upload_dir']
+        session['ai_upload_folder'] = user['ai_upload_dir']
+        session['past_upload_folder'] = user['past_upload_dir']
+
+        for file in glob.glob(os.path.join(session['upload_folder'], '*')):
             os.remove(file)
-        for file in glob.glob(os.path.join(AI_UPLOAD_FOLDER, '*')):
+        for file in glob.glob(os.path.join(session['ai_upload_folder'], '*')):
             os.remove(file)
+
         return redirect(url_for('dashboard'))
     else:
         return render_template('login.html', error="Invalid credentials, please try again.")
@@ -71,92 +117,122 @@ def create_account():
 
 @app.route('/register', methods=['POST'])
 def register():
-    global username, UPLOAD_FOLDER, AI_UPLOAD_FOLDER, PAST_UPLOAD_FOLDER, user_csv_file
+    db = get_db()
     name = request.form.get('name')
     username_value = request.form.get('username')
     email = request.form.get('email')
     phone = request.form.get('phone')
     password = request.form.get('password')
     confirm_password = request.form.get('confirm_password')
-    
+
     if password != confirm_password:
         return render_template('create_account.html', error="Passwords do not match.")
 
-    new_user = {
-        "username": username_value,
-        "name": name,
-        "email": email,
-        "phone_number": phone,
-        "password": password,
-        "upload_dir": f'app/static/customers/{username_value}/uploads',
-        "ai_upload_dir": f'app/static/customers/{username_value}/AI_uploads',
-        "past_upload_dir": f'app/static/customers/{username_value}/past_uploads',
-        "subscription": "No Plan",
-        "remaining_photos": 0,
-    }
+    upload_folder = f'app/static/customers/{username_value}/uploads'
+    ai_upload_folder = f'app/static/customers/{username_value}/AI_uploads'
+    past_upload_folder = f'app/static/customers/{username_value}/past_uploads'
 
-    UPLOAD_FOLDER = new_user['upload_dir']
-    AI_UPLOAD_FOLDER = new_user['ai_upload_dir']
-    PAST_UPLOAD_FOLDER = new_user['past_upload_dir']
-    username = username_value
+    try:
+        # Insert new user into the database
+        db.execute("""
+        INSERT INTO users (name, username, email, phone_number, password, upload_dir, ai_upload_dir, past_upload_dir)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (name, username_value, email, phone, password, upload_folder, ai_upload_folder, past_upload_folder))
+        db.commit()
 
-    user_csv_file = pd.concat([user_csv_file, pd.DataFrame([new_user])], ignore_index=True)
-    user_csv_file.to_csv("app/customers_info.csv", index=False)
+        # Fetch the newly created user
+        user = db.execute("SELECT id FROM users WHERE username = ?", (username_value,)).fetchone()
 
-    os.makedirs(UPLOAD_FOLDER)
-    os.makedirs(AI_UPLOAD_FOLDER)
-    os.makedirs(PAST_UPLOAD_FOLDER)
+        if not user:
+            return render_template('create_account.html', error="User creation failed. Please try again.")
 
-    # Store user data (replace with actual database logic)
-    session['user'] = username_value
-    return redirect(url_for('dashboard'))
+        # Create directories for user
+        os.makedirs(upload_folder, exist_ok=True)
+        os.makedirs(ai_upload_folder, exist_ok=True)
+        os.makedirs(past_upload_folder, exist_ok=True)
+
+        # Automatically log the user in by setting session variables
+        session['user_id'] = user['id']
+        print(user['id'])
+        session['username'] = username_value
+        session['upload_folder'] = upload_folder
+        session['ai_upload_folder'] = ai_upload_folder
+        session['past_upload_folder'] = past_upload_folder
+
+        return redirect(url_for('dashboard'))
+    
+    except sqlite3.IntegrityError:
+        return render_template('create_account.html', error="Username already exists.")
 
 @app.route('/account_settings')
 def account_settings():
-    global user_csv_file, username
-    user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
-    print(user_info)
-    user_name = user_info['name']
-    user_plan = user_info['subscription']
+    if 'user_id' not in session:
+        return jsonify({"message": "Unauthorized"}), 403
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+    user_name = user['name']
+    user_plan = user['subscription']
     if user_plan != "Subscription":
         user_plan = ''
-    user_email = user_info['email']
-    user_phone = user_info['phone_number']
+    user_email = user['email']
+    user_phone = user['phone_number']
 
     return render_template('account_settings.html', name=user_name, email=user_email, phone=user_phone, plan=user_plan)
 
 @app.route('/delete-account', methods=['POST'])
 def delete_account():
-    global user_csv_file, username
-    shutil.rmtree(UPLOAD_FOLDER.replace("/uploads", ""))
-    user_csv_file = user_csv_file[user_csv_file['username'] != username]
-    user_csv_file.to_csv("app/customers_info.csv", index=False)
+    if 'user_id' not in session:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    shutil.rmtree(user['upload_dir'], ignore_errors=True)
+    shutil.rmtree(user['ai_upload_dir'], ignore_errors=True)
+    shutil.rmtree(user['past_upload_dir'], ignore_errors=True)
+
+    db.execute("DELETE FROM users WHERE id = ?", (session['user_id'],))
+    db.execute("DELETE FROM images WHERE user_id = ?", (session['user_id'],))
+    db.commit()
+
+    session.clear()
     return jsonify({"message": "Account deleted successfully"}), 200
 
 @app.route("/cancel_subscription", methods=['POST'])
 def cancel_subscription():
-    global user_csv_file, username
-    user_csv_file.loc[user_csv_file['username'] == username, 'subscription'] = "No Plan"
-    user_csv_file.to_csv("app/customers_info.csv", index=False)
+    if 'user_id' not in session:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    db = get_db()
+    db.execute("UPDATE users SET subscription = 'No Plan' WHERE id = ?", (session['user_id'],))
+    db.commit()
+
     return jsonify({"message": "Subscription canceled successfully"}), 200
 
 @app.route('/dashboard')
 def dashboard():
-    global user_csv_file, username
     # Fetch user details from the dataframe
-    user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
-    user_name = user_info['name']
-    subscription_plan = user_info['subscription']
-    remaining_images = user_info['remaining_photos']
+    if 'user_id' not in session:
+        return jsonify({"message": "Unauthorized"}), 403
     
-    # Get the number of processed images
-    if os.path.exists(PAST_UPLOAD_FOLDER):
-        processed_images = len([f for f in os.listdir(PAST_UPLOAD_FOLDER) if os.path.isfile(os.path.join(PAST_UPLOAD_FOLDER, f))])
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    
+    user_name = user['name']
+    subscription_plan = user['subscription']
+    remaining_images = user['remaining_photos']
+    
+    past_upload_folder = user['past_upload_dir']
+    if os.path.exists(past_upload_folder):
+        processed_images = len([f for f in os.listdir(past_upload_folder) if os.path.isfile(os.path.join(past_upload_folder, f))])
     else:
         processed_images = 0
-
+    
     # Get image file paths
-    images = [f"{PAST_UPLOAD_FOLDER}/{img}".replace("app/", "") for img in os.listdir(PAST_UPLOAD_FOLDER)] if processed_images > 0 else []
+    images = [f"{past_upload_folder}/{img}".replace("app/", "") for img in os.listdir(past_upload_folder)] if processed_images > 0 else []
 
     return render_template('dashboard.html', 
                            user_name=user_name, 
@@ -167,27 +243,54 @@ def dashboard():
 
 @app.route('/payment_options')
 def payment_options():
-    global user_csv_file, username
-    user_current_subscription = user_csv_file.loc[user_csv_file['username'] == username, 'subscription'].iloc[0]
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    
+    user_current_subscription = user['subscription']
     print(user_current_subscription)
+
     return render_template('payment_options.html', current_subscription=user_current_subscription)
 
 @app.route('/previous_images')
 def previous_images():
-    global PAST_UPLOAD_FOLDER
-    image_files = glob.glob(os.path.join(PAST_UPLOAD_FOLDER, '*'))
-    image_urls = [f"{PAST_UPLOAD_FOLDER.replace('app/', '')}/{os.path.basename(img)}" for img in image_files]
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    
+    past_upload_folder = user['past_upload_dir']
+    image_files = glob.glob(os.path.join(past_upload_folder, '*'))
+    image_urls = [f"{past_upload_folder.replace('app/', '')}/{os.path.basename(img)}" for img in image_files]
     print(image_urls)
     return render_template('previous_images.html', image_files=image_urls)
 
 @app.route('/download_past_uploads')
 def download_past_uploads():
-    global PAST_UPLOAD_FOLDER
-    ZIP_FILE_PATH = os.path.join(PAST_UPLOAD_FOLDER.replace("app/", "").replace("past_uploads", ""), "past_uploads.zip")
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    
+    past_upload_folder = user['past_upload_dir']
+    ZIP_FILE_PATH = os.path.join(past_upload_folder.replace("app/", "").replace("past_uploads", ""), "past_uploads.zip")
     try:
         # Compress the folder into a zip file
         if not os.path.exists(ZIP_FILE_PATH):
-            shutil.make_archive(PAST_UPLOAD_FOLDER, 'zip', PAST_UPLOAD_FOLDER)
+            shutil.make_archive(past_upload_folder, 'zip', past_upload_folder)
         # Serve the zip file
         response = send_file(
             ZIP_FILE_PATH,
@@ -205,37 +308,51 @@ def download_past_uploads():
 
 @app.route('/update_payments', methods=['POST'])
 def update_payments():
-    global subscription_to_buy, num_of_images_to_buy, cost_for_purchase
+    if 'user_id' not in session:
+        return jsonify({"message": "Unauthorized"}), 403
     
     data = request.json
-    subscription_to_buy = data.get('plan')
-    num_of_images_to_buy = data.get('images', 0)
-    if subscription_to_buy == "subscription":
-        cost_for_purchase = 15.00
-    elif subscription_to_buy == "buy_more_images":
-        cost_for_purchase = num_of_images_to_buy * 0.8
+    session['subscription_to_buy'] = data.get('plan')
+    session['num_of_images_to_buy'] = data.get('images', 0)
+    if session['subscription_to_buy'] == "subscription":
+        session['cost_for_purchase'] = 15.00
+    elif session['subscription_to_buy'] == "buy_more_images":
+        session['cost_for_purchase'] = session['num_of_images_to_buy'] * 0.8
     else:
-        cost_for_purchase = num_of_images_to_buy * 1.5
+        session['cost_for_purchase'] = session['num_of_images_to_buy'] * 1.5
     
     return jsonify({"status": "success"})
 
 @app.route('/index')
 def index():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
-    global user_csv_file, username
-    user_info = user_csv_file[user_csv_file['username'] == username].iloc[0]
-    remaining_images = user_info['remaining_photos']
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    remaining_images = user['remaining_photos']
     return render_template('index.html', remaining_images=remaining_images)
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    global files
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+
+    upload_folder = user['upload_dir']
+
     # Check if files are in the request
     if 'images' not in request.files:
         return redirect(request.url)
 
-    files = 0
     uploaded_files = request.files.getlist('images')
     session['image_paths'] = []
     session['room_types'] = []  # Initialize room types for each image
@@ -246,13 +363,12 @@ def upload():
     for file in uploaded_files:
         if file.filename != '':
             # Secure the filename and save to the upload folder
-            files += 1
             filename = secure_filename(file.filename)
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            file_path = os.path.join(upload_folder, filename)
             file.save(file_path)
 
             # Store the relative path (relative to the 'static' folder)
-            session['image_paths'].append(f"{UPLOAD_FOLDER}/{filename}")
+            session['image_paths'].append(f"{upload_folder}/{filename}")
             session['room_types'].append("")  # Default room type as empty string
             session['upscale_factors'].append("")  # Default upscale factor as empty string
             session['color_schemes'].append("")  # Default color scheme as empty string
@@ -356,43 +472,45 @@ def navigate():
 @app.route('/checkout')
 def checkout():
     # Simulate values coming from the backend
-    if subscription_to_buy == "buy_more_images":
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    if session['subscription_to_buy'] == "buy_more_images":
         plan = "Buy More Images"
-    elif subscription_to_buy == "pay_as_you_go":
+    elif session['subscription_to_buy'] == "pay_as_you_go":
         plan = "Pay As You Go"
     else:
         plan = "Subscription"
-    return render_template("checkout.html", num_of_images=num_of_images_to_buy, plan=plan, cost=cost_for_purchase)
+    return render_template("checkout.html", num_of_images=session['num_of_images_to_buy'], plan=plan, cost=session['cost_for_purchase'])
 
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
     try:
         # Assume values are coming from the backend
-        
-        if subscription_to_buy == "subscription":
+        if session['subscription_to_buy'] == "subscription":
             # Create a Stripe Product
-            product = stripe.Product.create(name=f"Subscription Plan - {num_of_images_to_buy} Images")
+            product = stripe.Product.create(name=f"Subscription Plan - {session['num_of_images_to_buy']} Images")
             
             # Create a Price Object for Subscription
             price = stripe.Price.create(
-                unit_amount=int(cost_for_purchase * 100),  # Convert dollars to cents
+                unit_amount=int(session['cost_for_purchase'] * 100),  # Convert dollars to cents
                 currency="usd",
                 recurring={"interval": "month"},
                 product=product.id,
             )
         else:
             # Create a Stripe Product
-            product = stripe.Product.create(name=f"One-Time Purchase - {num_of_images_to_buy} Images")
+            product = stripe.Product.create(name=f"One-Time Purchase - {session['num_of_images_to_buy']} Images")
             
             # Create a Price Object for One-Time Payment
             price = stripe.Price.create(
-                unit_amount=int(cost_for_purchase * 100),  # Convert dollars to cents
+                unit_amount=int(session['cost_for_purchase'] * 100),  # Convert dollars to cents
                 currency="usd",
                 product=product.id,
             )
         print("Price Object Created:", price.id)  # Debugging
         # Create Stripe Checkout Session
-        session = stripe.checkout.Session.create(
+        stripe_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
             line_items=[
                 {
@@ -400,24 +518,42 @@ def create_checkout_session():
                     "quantity": 1,
                 }
             ],
-            mode="subscription" if subscription_to_buy == "subscription" else "payment",
+            mode="subscription" if session['subscription_to_buy'] == "subscription" else "payment",
             success_url=url_for('success', _external=True),
             cancel_url=url_for('cancel', _external=True),
-        )
-        
-        return jsonify({"id": session.id})
+        )        
+        return jsonify({"id": stripe_session.id})
     except Exception as e:
         return jsonify(error=str(e)), 400
 
 @app.route('/success')
 def success():
-    global user_csv_file, username, num_of_images_to_buy, subscription_to_buy
-    user_csv_file.loc[user_csv_file['username'] == username, 'remaining_photos'] += num_of_images_to_buy
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    
+    num_of_images_to_add = session['num_of_images_to_buy']
+    subscription_to_buy = session['subscription_to_buy']
+
     if subscription_to_buy == "subscription":
-        user_csv_file.loc[user_csv_file['username'] == username, 'subscription'] = "Subscription"
+        subscription_to_buy = "Subscription"
     if subscription_to_buy == "pay_as_you_go":
-        user_csv_file.loc[user_csv_file['username'] == username, 'subscription'] = "Pay As You Go"
-    user_csv_file.to_csv("app/customers_info.csv", index=False)
+        subscription_to_buy = "Pay As You Go"
+    
+    new_remaining_photos = user['remaining_photos'] + num_of_images_to_add
+
+    db.execute("""
+        UPDATE users
+        SET remaining_photos = ?, subscription = ?
+        WHERE id = ?
+    """, (new_remaining_photos, subscription_to_buy, session['user_id']))
+    db.commit()
+
     return redirect(url_for('dashboard',  message="success"))
 
 @app.route('/cancel')
@@ -426,76 +562,156 @@ def cancel():
 
 @app.route('/confirm_image', methods=['GET', 'POST'])
 def confirm_image():
-    global user_csv_file, username
-    image_files = glob.glob(os.path.join(UPLOAD_FOLDER, '*'))  # Find all PNG images
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+
+    if not user:
+        return redirect(url_for('login'))
+    
+    upload_folder = user['upload_dir']
+    image_files = glob.glob(os.path.join(upload_folder, '*'))  # Find all PNG images
     total_images = len(image_files)
-    image_urls = [f"{UPLOAD_FOLDER}/{os.path.basename(img)}".replace("app/", "") for img in image_files]
+    image_urls = [f"{upload_folder}/{os.path.basename(img)}".replace("app/", "") for img in image_files]
 
     return render_template('confirm_image.html', total_images=total_images, image_urls=image_urls)
 
-task_status = {"status": "pending", "result": None}
-image_urls_AI = []
-
-# Global variable to track task status
 @app.route('/download', methods=['GET'])
 def download():
-    image_files = glob.glob(os.path.join(UPLOAD_FOLDER, '*'))
-    user_csv_file.loc[user_csv_file['username'] == username, 'remaining_photos'] -= len(image_files)
-    user_csv_file.to_csv("app/customers_info.csv", index=False)
-    image_files = glob.glob(os.path.join(UPLOAD_FOLDER, '*'))  # Find all PNG images
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+
+    # Retrieve user details from the database
+    user = db.execute("SELECT upload_dir, ai_upload_dir, past_upload_dir, remaining_photos FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+    if not user:
+        return redirect(url_for('dashboard', message="error"))
+
+    upload_folder = user['upload_dir']
+    ai_upload_folder = user['ai_upload_dir']
+    past_upload_folder = user['past_upload_dir']
+
+    # Get list of uploaded images
+    image_files = glob.glob(os.path.join(upload_folder, '*'))
     total_images = len(image_files)
-    estimated_time = round(total_images * 0.5, 2)  # Estimate processing time
+    estimated_time = round(total_images * 0.5, 2)
 
-    def long_task():
-        global task_status
-        global image_urls_AI
-        try:
-            task_status["status"] = "processing"
-            # new_image_urls = generate_new_AI_images(session_data, config['url'], config['headers'])
-            # download_images(new_image_urls, AI_UPLOAD_FOLDER)
-            image_file_AI = glob.glob(os.path.join(AI_UPLOAD_FOLDER, "*"))  # Find all PNG images
-            image_urls_AI = [f"{AI_UPLOAD_FOLDER}/{os.path.basename(img)}".replace("app/", "") for img in image_file_AI]
-            for filename in os.listdir(UPLOAD_FOLDER):
-                source_path = os.path.join(UPLOAD_FOLDER, filename)
-                destination_path = os.path.join(PAST_UPLOAD_FOLDER, filename)
-                if os.path.isfile(source_path):
-                    shutil.copy2(source_path, destination_path)
-            print("All files copied to past upload directory!")
-            task_status["status"] = "completed"
-        except Exception as e:
-            task_status["status"] = "error"
-            task_status["result"] = str(e)
+    # Update remaining photo count in the database
+    new_remaining_photos = max(user['remaining_photos'] - total_images, 0)
+    db.execute("UPDATE users SET remaining_photos = ? WHERE id = ?", (new_remaining_photos, session['user_id']))
+    db.commit()
 
-    # Start the task in a new thread
+    # Initialize task in the database
+    db.execute("""
+        INSERT INTO tasks (user_id, status, result, images) 
+        VALUES (?, 'processing', NULL, NULL)
+        ON CONFLICT(user_id) DO UPDATE SET status='processing', result=NULL, images=NULL
+    """, (session['user_id'],))
+    db.commit()
+
     session_data = dict(session.items())
-    task_thread = threading.Thread(target=long_task)
+
+    # Start AI processing in a separate thread
+    task_thread = threading.Thread(target=long_task, args=(session_data, session['user_id'], upload_folder, ai_upload_folder, past_upload_folder))
     task_thread.start()
 
-    return render_template('download.html', total_time=estimated_time, image_urls=image_urls_AI)
+    return render_template('download.html', total_time=estimated_time)
+
+
+def long_task(session_data, user_id, upload_folder, ai_upload_folder, past_upload_folder):
+    """Handles AI image processing in a separate thread and updates the database."""
+    
+    # Create a new SQLite connection since threads don't have access to Flask's `g` object
+    db = sqlite3.connect(DATABASE, check_same_thread=False)
+    cursor = db.cursor()
+
+    try:
+        cursor.execute("UPDATE tasks SET status='processing' WHERE user_id = ?", (user_id,))
+        db.commit()
+
+        # Generate AI images (replace with actual AI processing logic)
+        print("AI Generating process started")
+        new_image_urls = generate_new_AI_images(session_data, config['url'], config['headers'])
+        download_images(new_image_urls, ai_upload_folder)
+
+        # Get AI-generated image files
+        image_files_AI = glob.glob(os.path.join(ai_upload_folder, "*"))
+        image_urls_AI = [f"{ai_upload_folder}/{os.path.basename(img)}".replace("app/", "") for img in image_files_AI]
+
+        # Move original images to past uploads
+        for filename in os.listdir(ai_upload_folder):
+            source_path = os.path.join(ai_upload_folder, filename)
+            destination_path = os.path.join(past_upload_folder, filename)
+            if os.path.isfile(source_path):
+                shutil.copy2(source_path, destination_path)
+
+        print("All files copied to past upload directory!")
+
+        # Update task status and store AI images in database
+        cursor.execute("""
+            UPDATE tasks
+            SET status = 'completed', images = ?
+            WHERE user_id = ?
+        """, (",".join(image_urls_AI), user_id))
+        db.commit()
+
+    except Exception as e:
+        cursor.execute("UPDATE tasks SET status = 'error', result = ? WHERE user_id = ?", (str(e), user_id))
+        db.commit()
+
+    finally:
+        db.close()  # Ensure the database connection is closed
+
 
 @app.route('/check_status', methods=['GET'])
 def check_status():
-    return jsonify({"status": task_status["status"], "images": image_urls_AI})
+    """Checks the status of the AI processing task from the database."""
+    if 'user_id' not in session:
+        return jsonify({"status": "error", "message": "Unauthorized"}), 403
+
+    db = get_db()
+    task = db.execute("SELECT status, images FROM tasks WHERE user_id = ?", (session['user_id'],)).fetchone()
+
+    if not task:
+        return jsonify({"status": "pending", "images": []})
+
+    return jsonify({
+        "status": task["status"],
+        "images": task["images"].split(",") if task["images"] else []
+    })
 
 @app.route('/download-folder', methods=['GET'])
 def download_folder():
-    FOLDER_PATH = AI_UPLOAD_FOLDER
-    ZIP_FILE_PATH = os.path.join(AI_UPLOAD_FOLDER.replace("app/", "").replace("AI_uploads", ""), "AI_uploads.zip")
-    print(ZIP_FILE_PATH)
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    db = get_db()
+    
+    # Retrieve AI upload directory from the database
+    user = db.execute("SELECT ai_upload_dir FROM users WHERE id = ?", (session['user_id'],)).fetchone()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    ai_upload_folder = user['ai_upload_dir']
+    zip_file_path = os.path.join(ai_upload_folder.replace("app/", "").replace("AI_uploads", ""), "AI_uploads.zip")
+
     try:
         # Compress the folder into a zip file
-        if not os.path.exists(ZIP_FILE_PATH):
-            shutil.make_archive(FOLDER_PATH, 'zip', FOLDER_PATH)
+        if not os.path.exists(zip_file_path):
+            shutil.make_archive(ai_upload_folder, 'zip', ai_upload_folder)
         # Serve the zip file
         response = send_file(
-            ZIP_FILE_PATH,
+            zip_file_path,
             as_attachment=True,
             download_name="images.zip",
             mimetype='application/zip'
         )
 
         # Delete the zip file after serving
-        os.remove("app/" + ZIP_FILE_PATH)
+        os.remove("app/" + zip_file_path)
 
         return response
     except Exception as e:
